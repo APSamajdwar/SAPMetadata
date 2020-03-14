@@ -2,17 +2,44 @@ from selenium import webdriver
 from bs4 import BeautifulSoup
 import pandas as pd
 import string
+from configparser import ConfigParser
+# from selenium.webdriver.chrome.options import Options
 
 
 def writeMetadata(sapTable):
-    
+
+    # Set file path and directory
+    config = ConfigParser()
+    config.read('config.ini')
+    chromeDriverPath = config.get('MAIN', 'CHROMEDRIVERPATH')
+    targetDir = config.get('MAIN', 'TARGETDIR')
+    targetFileType = config.get('MAIN', 'TARGETFILETYPE')
+    targetFile = sapTable+'.'+ targetFileType
+    baseUrl = config.get('MAIN','BASEURL')
+
     #Declare variable
     newRow=[]
     allElement=[]
     
-    #Open page and get page source
+    # Open page and get page source
+    # Get the page data without opening Browser
+    # options = Options()
+    # options.add_argument('--headless')
+    # options.add_argument('--disable-gpu')
+    # driver = webdriver.Chrome(chrome_options=options)
+    # try:
+    #     driver.set_page_load_timeout(10)
+    #     driver.get(getProcessUrl(sapTable))
+    # except Exception:
+    #     print ('Time Out')
+    #     driver.send_keys(Keys.CONTROL + 'Escape')
+
+
     driver = webdriver.Chrome()
-    driver.get(getProcessUrl(sapTable))
+    try:
+        driver.get(getProcessUrl(sapTable,baseUrl))
+    except Exception:
+        print ('Unable to get data for: '+sapTable)
     content = driver.page_source
     soup = BeautifulSoup(content, features="html.parser")
 
@@ -32,28 +59,27 @@ def writeMetadata(sapTable):
     dfTable=dfTable[1:]
     dfTable.columns = newHeader
 
-    #Modify the dataframe in the requried format
-
-    print(dfTable.head(3))
-
-    # rename columns
-    dfTable = dfTable.rename(columns={'length (Decimals)' : 'len', 'headField':'key'})
+    #####Modify the dataframe in the requried format####
+    # Rename columns
+    dfTable = dfTable.rename(columns={'length (Decimals)' : 'len', 'headField':'Key'})
 
     # Add/modify columns
     dfTable['Length'], dfTable['Decimal'] = zip(*dfTable['len'].map(splitDecimal))
-    dfTable['key'].replace({'keyField':'Y','otherField':''},inplace = True)
+    dfTable['Key'].replace({'keyField':'Y','otherField':''},inplace = True)
+    dfTable['Domain'] = dfTable['Field']
+    dfTable.insert(0, 'Number', range(1,1+len(dfTable)))
 
-    #drop unnecessary columns
-    dfTable.drop(['len'],axis=1)
+    # Drop unnecessary columns
+    dfTable = dfTable.drop(['len','Conversion Routine'],axis=1)
 
     #Rearrange columns
+    dfTable = dfTable[['Number', 'Field', 'Key', 'Data Element', 'Domain', 'Data Type', 'Length', 'Decimal', 'Description', 'Check table']]
 
-
-    #Quick test
-    print(dfTable.head(3))
+    #Quick Test
+    # print(dfTable.head(3))
     
     #Write to a file
-    writer = pd.ExcelWriter('./target/metadata.xlsx',engine='xlsxwriter')
+    writer = pd.ExcelWriter(targetDir+'\\' + targetFile,engine='xlsxwriter')
     dfTable.to_excel(writer,'Sheet1',index=False)
     writer.save()
 
@@ -61,11 +87,11 @@ def writeMetadata(sapTable):
     driver.quit()
 
 #Identify the link for the SAP Table
-def getProcessUrl(sapTable):
+def getProcessUrl(sapTable,baseUrl):
     sapTable=sapTable.lower()
-    baseUrl = "https://www.se80.co.uk/saptables/"
     tableIndex = sapTable[0]
     return baseUrl+tableIndex+"/"+sapTable+"/"+sapTable+".htm"
+
 
 def splitDecimal(len):
     len = str(len)
