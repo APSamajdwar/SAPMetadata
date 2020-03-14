@@ -32,8 +32,28 @@ def writeMetadata(sapTable):
     dfTable=dfTable[1:]
     dfTable.columns = newHeader
 
+    #Modify the dataframe in the requried format
+
+    print(dfTable.head(3))
+
+    # rename columns
+    dfTable = dfTable.rename(columns={'length (Decimals)' : 'len', 'headField':'key'})
+
+    # Add/modify columns
+    dfTable['Length'], dfTable['Decimal'] = zip(*dfTable['len'].map(splitDecimal))
+    dfTable['key'].replace({'keyField':'Y','otherField':''},inplace = True)
+
+    #drop unnecessary columns
+    dfTable.drop(['len'],axis=1)
+
+    #Rearrange columns
+
+
+    #Quick test
+    print(dfTable.head(3))
+    
     #Write to a file
-    writer = pd.ExcelWriter('../target/metadata.xlsx',engine='xlsxwriter')
+    writer = pd.ExcelWriter('./target/metadata.xlsx',engine='xlsxwriter')
     dfTable.to_excel(writer,'Sheet1',index=False)
     writer.save()
 
@@ -46,3 +66,11 @@ def getProcessUrl(sapTable):
     baseUrl = "https://www.se80.co.uk/saptables/"
     tableIndex = sapTable[0]
     return baseUrl+tableIndex+"/"+sapTable+"/"+sapTable+".htm"
+
+def splitDecimal(len):
+    len = str(len)
+    flagDecimal = len.find('(')
+    if (flagDecimal!= -1):
+        return len.split('(',)[0], len.split('(',)[1].strip(')')
+    else:
+        return len,'0'
