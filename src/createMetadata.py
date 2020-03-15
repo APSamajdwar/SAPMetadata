@@ -1,46 +1,34 @@
-from selenium import webdriver
-from bs4 import BeautifulSoup
-import pandas as pd
+from pathlib import Path
+import os.path
+try:
+    from selenium import webdriver
+except ModuleNotFoundError:
+    os.system("pip install --install-option=\"--prefix={}\" selenium".format(os.path.join(project_main_folder_path, "_depedencies")))
+    from selenium import webdriver
+
+try:
+    from bs4 import BeautifulSoup
+except ModuleNotFoundError:
+    os.system("pip install --install-option=\"--prefix={}\" bs4".format(os.path.join(".", "_depedencies")))
+    from bs4 import BeautifulSoup
+
+try:
+    import pandas as pd
+except ModuleNotFoundError:
+    os.system("pip install --install-option=\"--prefix={}\" pandas".format(os.path.join(".", "_depedencies")))
+    os.system("pip install --install-option=\"--prefix={}\" xlsxwriter".format(os.path.join(".", "_depedencies")))
+    import pandas as pd
+
 import string
 from configparser import ConfigParser
-# from selenium.webdriver.chrome.options import Options
-
 
 def writeMetadata(sapTable):
-
-    # Set file path and directory
-    config = ConfigParser()
-    config.read('config.ini')
-    chromeDriverPath = config.get('MAIN', 'CHROMEDRIVERPATH')
-    targetDir = config.get('MAIN', 'TARGETDIR')
-    targetFileType = config.get('MAIN', 'TARGETFILETYPE')
-    targetFile = sapTable+'.'+ targetFileType
-    baseUrl = config.get('MAIN','BASEURL')
-
     #Declare variable
     newRow=[]
     allElement=[]
     
     # Open page and get page source
-    # Get the page data without opening Browser
-    # options = Options()
-    # options.add_argument('--headless')
-    # options.add_argument('--disable-gpu')
-    # driver = webdriver.Chrome(chrome_options=options)
-    # try:
-    #     driver.set_page_load_timeout(10)
-    #     driver.get(getProcessUrl(sapTable))
-    # except Exception:
-    #     print ('Time Out')
-    #     driver.send_keys(Keys.CONTROL + 'Escape')
-
-
-    driver = webdriver.Chrome()
-    try:
-        driver.get(getProcessUrl(sapTable,baseUrl))
-    except Exception:
-        print ('Unable to get data for: '+sapTable)
-    content = driver.page_source
+    content = openWebdriver(sapTable)
     soup = BeautifulSoup(content, features="html.parser")
 
     #Iterate through page source and store data in array
@@ -74,17 +62,30 @@ def writeMetadata(sapTable):
 
     #Rearrange columns
     dfTable = dfTable[['Number', 'Field', 'Key', 'Data Element', 'Domain', 'Data Type', 'Length', 'Decimal', 'Description', 'Check table']]
-
-    #Quick Test
-    # print(dfTable.head(3))
     
-    #Write to a file
-    writer = pd.ExcelWriter(targetDir+'\\' + targetFile,engine='xlsxwriter')
-    dfTable.to_excel(writer,'Sheet1',index=False)
-    writer.save()
+    #Call writeToExcel
+    writeData = writeToExcel(dfTable, sapTable)
+    if writeData != '':
+        print ('New metadata created: ' + writeData)
+    
 
-    #Close page
-    driver.quit()
+def openWebdriver(tableName):
+    config = ConfigParser()
+    config.read('config.ini')
+    baseUrl = config.get('MAIN','BASEURL')
+    driver = webdriver.Chrome()
+    try:
+        driver.get(getProcessUrl(tableName,baseUrl))
+        content = driver.page_source
+        driver.quit()
+        return content
+    except Exception:
+        print ('Unable to get data for: '+tableName+'\n')
+        print('Error: ')
+        raise
+        driver.quit()
+        exit()
+
 
 #Identify the link for the SAP Table
 def getProcessUrl(sapTable,baseUrl):
@@ -100,3 +101,24 @@ def splitDecimal(len):
         return len.split('(',)[0], len.split('(',)[1].strip(')')
     else:
         return len,'0'
+
+def writeToExcel(df, tableName):
+    try:
+        config = ConfigParser()
+        config.read('config.ini')
+        targetDir = Path(config.get('MAIN', 'TARGETDIR'))
+        targetDir.mkdir(parents=True, exist_ok=True)
+        targetSuffix = config.get('MAIN', 'TARGETFILETYPE')
+        targetFileName = tableName +'.'+ targetSuffix
+        targetFile = targetDir / targetFileName
+        
+        #Write to a file
+        writer = pd.ExcelWriter(targetFile,engine='xlsxwriter')
+        df.to_excel(writer,'Sheet1',index=False)
+        writer.save()
+        return str(targetFile)
+    except Exception:
+        print('Error:')
+        raise
+        return ''
+

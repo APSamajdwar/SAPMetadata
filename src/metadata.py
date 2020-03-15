@@ -1,5 +1,6 @@
 import createMetadata as cm
 import sys
+import string
 
 if __name__ == "__main__":
     # print (sys.argv)
